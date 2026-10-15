@@ -1,0 +1,164 @@
+<?xml version="1.0"?>
+<!--
+  husky_macro.urdf.xacro  —  Isaac Sim varijanta
+
+  Razlike u odnosu na Gazebo original:
+    1. inertial_link je spojen u base_link  (vidi komentar kod base_link)
+    2. <ros2_control> blok je uklonjen      (upravljanje ide kroz OmniGraph)
+    3. arg "is_sim" je uklonjen             (postojao je samo zbog gz_ros2_control plugina)
+    4. neiskorišteni realsense/sensor_arch argumenti i includovi su uklonjeni
+    5. dodan opcionalni base_laser frame za RTX LiDAR
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!--
+    urdf_extras MORA ostati deklariran ovdje jer ga husky.urdf.xacro
+    (tvoja top-level datoteka) koristi kroz $(arg urdf_extras).
+  -->
+  <xacro:arg name="urdf_extras" default="$(optenv CPR_URDF_EXTRAS empty.urdf)" />
+
+  <!-- LiDAR frame — ugasi ako lidar dodaješ ručno u Isaac stageu -->
+  <xacro:arg name="laser_enabled" default="false" />
+  <xacro:arg name="laser_xyz"     default="0.2206 0.0 0.2825" />
+  <xacro:arg name="laser_rpy"     default="0.0 0.0 0.0" />
+
+  <xacro:property name="husky_front_bumper_extend" value="$(optenv HUSKY_FRONT_BUMPER_EXTEND 0)" />
+  <xacro:property name="husky_rear_bumper_extend"  value="$(optenv HUSKY_REAR_BUMPER_EXTEND 0)" />
+
+  <xacro:include filename="$(find husky_description)/urdf/decorations.urdf.xacro" />
+  <xacro:include filename="$(find husky_description)/urdf/wheel.urdf.xacro" />
+
+  <xacro:property name="M_PI" value="3.14159265359"/>
+
+  <xacro:macro name="husky" params="prefix">
+
+    <!-- Dimenzije šasije -->
+    <xacro:property name="base_x_size" value="0.98740000" />
+    <xacro:property name="base_y_size" value="0.57090000" />
+    <xacro:property name="base_z_size" value="0.24750000" />
+
+    <!-- Pozicije kotača -->
+    <xacro:property name="wheelbase"             value="0.5120" />
+    <xacro:property name="track"                 value="0.5708" />
+    <xacro:property name="wheel_vertical_offset" value="0.03282" />
+
+    <!-- Svojstva kotača -->
+    <xacro:property name="wheel_length" value="0.1143" />
+    <xacro:property name="wheel_radius" value="0.1651" />
+
+    <!--
+      base_link — središte donje ploče.
+
+      IZMJENA ZA ISAAC: inercija je premještena ovamo iz nekadašnjeg
+      inertial_linka. Od Isaac Sima 5.1 fiksni zglobovi se NE mergaju ako
+      dijete ima masu i inerciju, pa bi originalna struktura dala base_link
+      bez mase i zasebno tijelo od 46 kg pored njega — artikulacija bi se
+      ponašala potpuno pogrešno.
+    -->
+    <link name="${prefix}base_link">
+
+      <inertial>
+        <mass value="46.034" />
+        <origin xyz="-0.00065 -0.085 0.062" />
+        <inertia ixx="0.6022"  ixy="-0.02364"  ixz="-0.1197"
+                 iyy="1.7386"  iyz="-0.001544" izz="2.0296" />
+      </inertial>
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <mesh filename="package://husky_description/meshes/base_link.dae" />
+        </geometry>
+      </visual>
+
+      <collision>
+        <origin xyz="${( husky_front_bumper_extend - husky_rear_bumper_extend ) / 2.0} 0 ${base_z_size/4}" rpy="0 0 0" />
+        <geometry>
+          <box size="${ base_x_size + husky_front_bumper_extend + husky_rear_bumper_extend } ${base_y_size} ${base_z_size/2}"/>
+        </geometry>
+      </collision>
+
+      <collision>
+        <origin xyz="0 0 ${base_z_size*3/4-0.01}" rpy="0 0 0" />
+        <geometry>
+          <box size="${base_x_size*4/5} ${base_y_size} ${base_z_size/2-0.02}"/>
+        </geometry>
+      </collision>
+
+    </link>
+
+    <!--
+      base_footprint na tlu ispod robota.
+      Nema mase pa ga Isaac merga u base_link i neće postojati kao zaseban prim.
+      Za Nav2 to nije problem: postavi robot_base_frame na base_link.
+    -->
+    <link name="${prefix}base_footprint"/>
+
+    <joint name="${prefix}base_footprint_joint" type="fixed">
+      <origin xyz="0 0 ${wheel_vertical_offset - wheel_radius}" rpy="0 0 0" />
+      <parent link="${prefix}base_link" />
+      <child  link="${prefix}base_footprint" />
+    </joint>
+
+
+    <!-- Kotači -->
+    <xacro:husky_wheel wheel_prefix="${prefix}front_left">
+      <origin xyz="${wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
+    </xacro:husky_wheel>
+    <xacro:husky_wheel wheel_prefix="${prefix}front_right">
+      <origin xyz="${wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
+    </xacro:husky_wheel>
+    <xacro:husky_wheel wheel_prefix="${prefix}rear_left">
+      <origin xyz="${-wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
+    </xacro:husky_wheel>
+    <xacro:husky_wheel wheel_prefix="${prefix}rear_right">
+      <origin xyz="${-wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
+    </xacro:husky_wheel>
+
+    <!-- Dekoracije: top plate, bumperi, user rail. Sve fiksno i bez mase. -->
+    <xacro:husky_decorate />
+
+    <ros2_control name="IsaacSystem" type="system">
+      <hardware>
+        <plugin>topic_based_ros2_control/TopicBasedSystem</plugin>
+        <param name="joint_commands_topic">/isaac_joint_commands</param>
+        <param name="joint_states_topic">/isaac_joint_states</param>
+      </hardware>
+      <joint name="${prefix}front_left_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-1</param>
+          <param name="max">1</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}rear_left_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-1</param>
+          <param name="max">1</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}front_right_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-1</param>
+          <param name="max">1</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${prefix}rear_right_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-1</param>
+          <param name="max">1</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+    </ros2_control>
+
+  </xacro:macro>
+
+</robot>

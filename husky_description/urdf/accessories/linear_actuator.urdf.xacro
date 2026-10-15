@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  
+  <xacro:macro name="lin_ac">
+    <joint name="lin_ac_joint" type="prismatic">
+      <origin xyz="0.03 0.0 0.05" rpy="0 0 0"/>
+      <parent link="front_bumper_link"/>
+      <child link="lin_ac_link"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-0.20" upper="0.2" effort="10.0" velocity="0.05"/> <!-- Limits -->
+      <dynamics damping="0.5" friction="0.2"/>
+    </joint>
+
+    <link name="lin_ac_link">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <visual>
+        <material name="white">
+          <color rgba="1 1 1 1"/>
+        </material>
+        <geometry>
+          <box size="0.05 0.05 0.15"/>
+        </geometry>
+      </visual>
+      <collision>
+      <geometry>
+        <box size="0.01 0.01 0.01"/>
+      </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.01"/>
+        <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
+      </inertial>
+    </link>
+
+    <!-- <ros2_control name="lin_ac_control" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+      <joint name="lin_ac_joint">
+        <command_interface name="effort"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+    </ros2_control> -->
+  </xacro:macro>
+</robot>

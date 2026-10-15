@@ -1,0 +1,262 @@
+<?xml version="1.0"?>
+<!--
+  husky_macro.urdf.xacro  —  Isaac Sim variant (ros2_control retained)
+
+  Differences from the Gazebo original:
+    1. inertial_link merged into base_link
+    2. gz_ros2_control plugin replaced with topic_based_ros2_control/TopicBasedSystem
+    3. "is_sim" arg replaced with "hardware_type" (isaac | real | mock)
+    4. unused realsense/sensor_arch args and includes removed
+    5. optional base_laser frame added for the RTX LiDAR
+
+  Prerequisites:
+    sudo apt install ros-jazzy-topic-based-ros2-control \
+                     ros-jazzy-diff-drive-controller \
+                     ros-jazzy-joint-state-broadcaster
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!--
+    urdf_extras MUST stay declared here because husky.urdf.xacro
+    (your top-level file) references it via $(arg urdf_extras).
+  -->
+  <xacro:arg name="urdf_extras" default="$(optenv CPR_URDF_EXTRAS empty.urdf)" />
+
+  <!-- isaac = Isaac Sim over topics | real = physical Husky | mock = no simulator -->
+  <xacro:arg name="hardware_type" default="isaac" />
+
+  <!-- Topics ros2_control uses to talk to Isaac -->
+  <xacro:arg name="isaac_joint_commands" default="/isaac_joint_commands" />
+  <xacro:arg name="isaac_joint_states"   default="/isaac_joint_states" />
+
+  <!-- LiDAR frame — disable if you add the lidar manually in the Isaac stage -->
+  <xacro:arg name="laser_enabled" default="true" />
+  <xacro:arg name="laser_xyz"     default="0.2206 0.0 0.2825" />
+  <xacro:arg name="laser_rpy"     default="0.0 0.0 0.0" />
+
+  <xacro:property name="husky_front_bumper_extend" value="$(optenv HUSKY_FRONT_BUMPER_EXTEND 0)" />
+  <xacro:property name="husky_rear_bumper_extend"  value="$(optenv HUSKY_REAR_BUMPER_EXTEND 0)" />
+
+  <xacro:include filename="$(find husky_description)/urdf/decorations.urdf.xacro" />
+  <xacro:include filename="$(find husky_description)/urdf/wheel.urdf.xacro" />
+
+  <xacro:property name="M_PI" value="3.14159265359"/>
+
+  <xacro:macro name="husky" params="prefix">
+
+    <!-- Chassis dimensions -->
+    <xacro:property name="base_x_size" value="0.98740000" />
+    <xacro:property name="base_y_size" value="0.57090000" />
+    <xacro:property name="base_z_size" value="0.24750000" />
+
+    <!-- Wheel mounting positions -->
+    <xacro:property name="wheelbase"             value="0.5120" />
+    <xacro:property name="track"                 value="0.5708" />
+    <xacro:property name="wheel_vertical_offset" value="0.03282" />
+
+    <!-- Wheel properties -->
+    <xacro:property name="wheel_length" value="0.1143" />
+    <xacro:property name="wheel_radius" value="0.1651" />
+
+    <!--
+      base_link — center of the robot's bottom plate.
+
+      ISAAC CHANGE: inertia moved here from the former inertial_link.
+      Since Isaac Sim 5.1, fixed joints are NOT merged when the child has
+      mass and inertia, so the original structure would produce a massless
+      base_link plus a separate 46 kg body next to it, breaking articulation.
+    -->
+    <link name="${prefix}base_link">
+
+      <inertial>
+        <mass value="46.034" />
+        <origin xyz="-0.00065 -0.085 0.062" />
+        <inertia ixx="0.6022"  ixy="-0.02364"  ixz="-0.1197"
+                 iyy="1.7386"  iyz="-0.001544" izz="2.0296" />
+      </inertial>
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <mesh filename="package://husky_description/meshes/base_link.dae" />
+        </geometry>
+      </visual>
+
+      <collision>
+        <origin xyz="${( husky_front_bumper_extend - husky_rear_bumper_extend ) / 2.0} 0 ${base_z_size/4}" rpy="0 0 0" />
+        <geometry>
+          <box size="${ base_x_size + husky_front_bumper_extend + husky_rear_bumper_extend } ${base_y_size} ${base_z_size/2}"/>
+        </geometry>
+      </collision>
+
+      <collision>
+        <origin xyz="0 0 ${base_z_size*3/4-0.01}" rpy="0 0 0" />
+        <geometry>
+          <box size="${base_x_size*4/5} ${base_y_size} ${base_z_size/2-0.02}"/>
+        </geometry>
+      </collision>
+
+    </link>
+
+    <!--
+      base_footprint on the ground beneath the robot.
+      It has no mass, so Isaac merges it into base_link and it will not
+      exist as a separate prim. For Nav2, set robot_base_frame to base_link.
+    -->
+    <link name="${prefix}base_footprint"/>
+
+    <joint name="${prefix}base_footprint_joint" type="fixed">
+      <origin xyz="0 0 ${wheel_vertical_offset - wheel_radius}" rpy="0 0 0" />
+      <parent link="${prefix}base_link" />
+      <child  link="${prefix}base_footprint" />
+    </joint>
+
+    <!-- IMU -->
+    <link name="${prefix}imu_link"/>
+    <joint name="${prefix}imu_joint" type="fixed">
+      <origin xyz="$(optenv CPR_IMU_XYZ 0 0 0)" rpy="$(optenv CPR_IMU_RPY 0 0 0)" />
+      <parent link="${prefix}base_link" />
+      <child  link="${prefix}imu_link" />
+    </joint>
+
+    <!-- Wheels -->
+    <xacro:husky_wheel wheel_prefix="${prefix}front_left">
+      <origin xyz="${wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
+    </xacro:husky_wheel>
+    <xacro:husky_wheel wheel_prefix="${prefix}front_right">
+      <origin xyz="${wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
+    </xacro:husky_wheel>
+    <xacro:husky_wheel wheel_prefix="${prefix}rear_left">
+      <origin xyz="${-wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
+    </xacro:husky_wheel>
+    <xacro:husky_wheel wheel_prefix="${prefix}rear_right">
+      <origin xyz="${-wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="0 0 0" />
+    </xacro:husky_wheel>
+
+    <!-- Decorations: top plate, bumpers, user rail. All fixed and massless. -->
+    <xacro:husky_decorate />
+
+    <!--
+      LiDAR frame.
+
+      Deliberately given a small mass and inertia: without it, Isaac 5.1+
+      merges the link into base_link, leaving you with no prim to attach the
+      RTX LiDAR to and no frame in the TF tree.
+      0.1 kg on a 46 kg robot is negligible.
+    -->
+    <xacro:if value="$(arg laser_enabled)">
+      <link name="${prefix}base_laser">
+        <inertial>
+          <mass value="0.1"/>
+          <origin xyz="0 0 0"/>
+          <inertia ixx="1e-4" ixy="0" ixz="0" iyy="1e-4" iyz="0" izz="1e-4"/>
+        </inertial>
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry>
+            <cylinder radius="0.04" length="0.06"/>
+          </geometry>
+        </visual>
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry>
+            <cylinder radius="0.04" length="0.06"/>
+          </geometry>
+        </collision>
+      </link>
+
+      <joint name="${prefix}base_laser_joint" type="fixed">
+        <origin xyz="$(arg laser_xyz)" rpy="$(arg laser_rpy)" />
+        <parent link="${prefix}base_link" />
+        <child  link="${prefix}base_laser" />
+      </joint>
+    </xacro:if>
+
+    <!--
+      ===================== ros2_control =====================
+
+      Isaac Sim has no native hardware_interface plugin. Instead we use
+      topic_based_ros2_control, which reads joint states from one topic and
+      writes commands to another. On the Isaac side, an OmniGraph provides:
+
+        ROS2 Publish Joint State   -> /isaac_joint_states
+        /isaac_joint_commands      -> ROS2 Subscribe Joint State
+                                   -> Articulation Controller
+
+      Switching to the real robot = just hardware_type:=real, nothing else.
+    -->
+    <ros2_control name="HuskyHardware" type="system">
+      <hardware>
+
+        <xacro:if value="${'$(arg hardware_type)' == 'isaac'}">
+          <plugin>topic_based_ros2_control/TopicBasedSystem</plugin>
+          <param name="joint_commands_topic">$(arg isaac_joint_commands)</param>
+          <param name="joint_states_topic">$(arg isaac_joint_states)</param>
+          <!--
+            CRITICAL for continuous wheel joints: Isaac reports joint
+            positions wrapped into the 2pi..-2pi range. Without this,
+            diff_drive_controller sees a 2pi jump every revolution and the
+            odometry blows up.
+          -->
+          <param name="sum_wrapped_joint_states">true</param>
+          <!-- -1 = always send a command; safer than the default for a mobile base -->
+          <param name="trigger_joint_command_threshold">-1</param>
+        </xacro:if>
+
+        <xacro:if value="${'$(arg hardware_type)' == 'mock'}">
+          <plugin>mock_components/GenericSystem</plugin>
+        </xacro:if>
+
+        <xacro:if value="${'$(arg hardware_type)' == 'real'}">
+          <!-- replace with your real Husky driver plugin -->
+          <plugin>husky_base/HuskyHardware</plugin>
+        </xacro:if>
+
+      </hardware>
+
+      <!--
+        CHECK THE NAMES! Older wheel.urdf.xacro calls the joints
+        "front_left_wheel", newer ones "front_left_wheel_joint".
+        Command: grep -o 'joint name="[^"]*wheel[^"]*"' husky.urdf
+      -->
+      <joint name="${prefix}front_left_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-4.0</param>
+          <param name="max">4.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="${prefix}rear_left_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-4.0</param>
+          <param name="max">4.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="${prefix}front_right_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-4.0</param>
+          <param name="max">4.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="${prefix}rear_right_wheel_joint">
+        <command_interface name="velocity">
+          <param name="min">-4.0</param>
+          <param name="max">4.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+    </ros2_control>
+
+  </xacro:macro>
+
+</robot>

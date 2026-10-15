@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+*.swp
+*.blend1
+.thumbs/

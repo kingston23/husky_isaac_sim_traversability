@@ -1,0 +1,7 @@
+<library path="traversability_layer">
+  <class type="husky_traversability::TraversabilityLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>
+      Marks slope, step and obstacle costs from segmented ground / obstacle point clouds.
+    </description>
+  </class>
+</library>

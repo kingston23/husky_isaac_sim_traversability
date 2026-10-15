@@ -1,0 +1,34 @@
+ground_segmentation:
+  ros__parameters:
+    use_sim_time: true
+
+    # --- Input / frames -------------------------------------------------------
+    input_topic: /lidar/point_cloud
+    # Must be gravity-aligned: odom from an EKF that fuses IMU roll/pitch (two_d_mode: false).
+    target_frame: odom
+    # Frame whose origin lies above the ground under the robot.
+    seed_frame: base_link
+    # Height of the ground below seed_frame along its z axis (negative = below).
+    # Verify: ros2 run tf2_ros tf2_echo base_link base_footprint
+    seed_z_offset: -0.13
+
+    # Range filter in the sensor frame [m]; min_range removes hits on the robot itself.
+    min_range: 0.8
+    max_range: 30.0
+    tf_timeout: 0.1
+
+    # --- Grid and local fit ---------------------------------------------------
+    cell_size: 0.5              # [m]
+    low_band: 0.35              # [m] keep > cell_size * tan(max_slope_deg)
+    min_points_per_cell: 5
+    max_planarity: 0.05         # raise for grass / rough terrain
+    min_linearity_ratio: 0.05
+
+    # --- Ground acceptance ----------------------------------------------------
+    max_slope_deg: 25.0
+    max_step: 0.15              # [m]
+    max_slope_change_deg: 10.0
+    search_radius: 1.5          # [m] must bridge the gap between neighbouring scan rings
+    seed_radius: 4.0            # [m] must exceed the lidar blind zone around the robot
+    seed_height_tolerance: 0.25 # [m]
+    ground_inlier_threshold: 0.10  # [m]
