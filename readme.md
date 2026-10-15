@@ -103,3 +103,34 @@ ros2 launch husky_navigation nav2_test.launch.py
 ros2 launch husky_viz view_navigation.launch.py 
 
 
+## Third-party code
+
+| Package | Source | License | Changes |
+|---|---|---|---|
+
+
+All third-party packages retain their original licenses. See the `LICENSE` file in each package directory.
+
+## Third-party code
+
+This repository includes the following third-party packages:
+
+| Package | Source | License | Changes |
+|---|---|---|---|
+| `ground_segmentation` | [dfki-ric/ground_segmentation](https://github.com/dfki-ric/ground_segmentation), branch `master`, commit `<hash>` | BSD-3-Clause, © DFKI Robotics Innovation Center | Integrated into `husky_traversability` |
+| `husky_description` | [husky/husky](https://github.com/husky/husky), branch `<branch>`, commit `<hash>` | BSD-3-Clause, © Clearpath Robotics | Merged `inertial_link` into `base_link` for Isaac Sim compatibility |
+
+Original licenses are kept in:
+- `husky_traversability/LICENSE.txt` (DFKI ground segmentation)
+- `husky_description/LICENSE` (Clearpath Robotics)
+
+Ground segmentation is based on GSeg3D. If you use this work, please cite:
+
+    @inproceedings{lodhi2025gseg3d,
+      author    = {Muhammad Haider Khan Lodhi and Christoph Hertzberg},
+      title     = {GSeg3D: A High-Precision Grid-Based Algorithm for Safety-Critical Ground Segmentation in LiDAR Point Clouds},
+      booktitle = {2025 7th International Conference on Robotics and Computer Vision (ICRCV)},
+      pages     = {119-126},
+      year      = {2025},
+      doi       = {10.1109/ICRCV67407.2025.11349133}
+    }
